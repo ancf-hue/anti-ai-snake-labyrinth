@@ -1,0 +1,1272 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="icon" href="favicon.ico" type="image/x-icon" />
+    <title>Змея и Лабиринт</title>
+    <!-- Three.js с fallback на два CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.min.js"></script>
+    <script>
+        if (!window.THREE) {
+            document.write('<script src="https://unpkg.com/three@0.157.0/build/three.min.js"><\/script>');
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        html, body { margin: 0; padding: 0; overflow: hidden; overscroll-behavior: none; }
+        body { background: #f0f8ff; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #333; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: none; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+        canvas { position: fixed !important; top: 0; left: 0; z-index: 1; width: 100vw; height: 100vh; display: none; }
+        canvas.game-active { display: block !important; }
+        .page {
+            position: absolute; top: 0; left: 0;
+            width: 100vw;
+            height: 100vh;              /* fallback для старых браузеров */
+            height: 100dvh;             /* dynamic viewport height — iOS Safari fix */
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.5s, transform 0.5s;
+            transform: scale(0.95);
+            z-index: 100;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            padding: 20px;
+            background: rgba(240,248,255,0.95);
+            touch-action: pan-y;
+        }
+        .page.active { opacity: 1; pointer-events: all; transform: scale(1); }
+        #page-game { background: transparent !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; touch-action: none; }
+        #page-description { background: url('foto.webp') no-repeat center center; background-size: cover; position: relative; }
+        #page-description::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(200,230,255,0.7); z-index: -1; }
+        .page-bg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle at center, rgba(200,230,255,0.9) 0%, rgba(240,248,255,0.95) 100%); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); z-index: -1; }
+
+        .lang-btn-3d {
+            position: absolute; top: 20px; right: 20px;
+            padding: 12px 24px; font-size: 16px; font-weight: 800;
+            color: #2a5a8a; background: rgba(255,255,255,0.5);
+            -webkit-backdrop-filter: blur(20px) saturate(180%); backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(100,180,255,0.5); border-radius: 16px; cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.25,0.8,0.25,1);
+            box-shadow: 0 8px 32px rgba(100,180,255,0.2), inset 0 1px 0 rgba(255,255,255,0.5), 0 0 40px rgba(100,180,255,0.15);
+            text-transform: uppercase; letter-spacing: 1.5px; z-index: 200;
+            animation: glassPulseBlue 3s ease-in-out infinite;
+            touch-action: manipulation;
+        }
+        @keyframes glassPulseBlue {
+            0%,100% { box-shadow: 0 8px 32px rgba(100,150,255,0.2), inset 0 1px 0 rgba(255,255,255,0.5), 0 0 40px rgba(100,150,255,0.15); border-color: rgba(100,150,255,0.5); }
+            50% { box-shadow: 0 8px 48px rgba(100,150,255,0.4), inset 0 1px 0 rgba(255,255,255,0.7), 0 0 70px rgba(100,150,255,0.3); border-color: rgba(150,200,255,0.8); }
+        }
+        .lang-btn-3d:hover { transform: translateY(-3px) scale(1.05); border-color: rgba(100,180,255,0.9); color: #1a4a7a; text-shadow: 0 0 12px rgba(100,180,255,0.5); animation: none; }
+        .lang-btn-3d:active { transform: translateY(1px) scale(0.97); }
+
+        .voice-test-btn {
+            position: absolute; top: 20px; left: 20px;
+            padding: 10px 18px; font-size: 13px; font-weight: 800;
+            color: #2a5a8a; background: rgba(255,255,255,0.6);
+            -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+            border: 1px solid rgba(100,180,255,0.5); border-radius: 14px; cursor: pointer;
+            transition: all 0.2s; z-index: 200; touch-action: manipulation;
+            text-transform: uppercase; letter-spacing: 1px;
+        }
+        .voice-test-btn:hover { transform: translateY(-2px) scale(1.03); border-color: rgba(100,180,255,0.9); }
+        .voice-test-btn:active { transform: scale(0.97); }
+
+        .glass-btn-3d { position: relative; padding: 18px 48px; font-size: 18px; font-weight: 800; color: #2a5a8a; background: rgba(255,255,255,0.6); -webkit-backdrop-filter: blur(20px) saturate(180%); backdrop-filter: blur(20px) saturate(180%); border: 1px solid rgba(100,180,255,0.5); border-radius: 20px; cursor: pointer; transition: all 0.3s cubic-bezier(0.25,0.8,0.25,1); box-shadow: 0 8px 32px rgba(100,180,255,0.3), inset 0 1px 0 rgba(255,255,255,0.8), inset 0 -2px 0 rgba(0,0,0,0.1), 0 0 40px rgba(100,180,255,0.2); text-transform: uppercase; letter-spacing: 1.5px; overflow: hidden; margin: 12px; z-index: 1; animation: glassPulse 3s ease-in-out infinite; touch-action: manipulation; }
+        .glass-btn-3d::before { content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.4) 0%, transparent 60%); pointer-events: none; mix-blend-mode: overlay; animation: shineMove 6s linear infinite; }
+        .glass-btn-3d::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 50%; background: linear-gradient(to bottom, rgba(255,255,255,0.4), transparent); border-radius: 20px 20px 0 0; pointer-events: none; }
+        @keyframes shineMove { 0% { transform: translate(-20%,-20%) rotate(0deg); } 100% { transform: translate(20%,20%) rotate(10deg); } }
+        @keyframes glassPulse { 0%,100% { box-shadow: 0 8px 32px rgba(100,180,255,0.3), inset 0 1px 0 rgba(255,255,255,0.8), 0 0 40px rgba(100,180,255,0.2); border-color: rgba(100,180,255,0.5); } 50% { box-shadow: 0 8px 48px rgba(100,180,255,0.5), inset 0 1px 0 rgba(255,255,255,1), 0 0 70px rgba(100,180,255,0.4); border-color: rgba(100,200,255,0.8); } }
+        .glass-btn-3d:hover { transform: translateY(-4px) scale(1.03); border-color: rgba(100,180,255,0.9); color: #1a4a7a; text-shadow: 0 0 12px rgba(100,180,255,0.5); box-shadow: 0 12px 40px rgba(100,180,255,0.6), inset 0 1px 0 rgba(255,255,255,0.9), 0 0 80px rgba(100,180,255,0.5); animation: none; }
+        .glass-btn-3d:active { transform: translateY(1px) scale(0.97); box-shadow: 0 4px 16px rgba(0,0,0,0.2), inset 0 2px 4px rgba(0,0,0,0.15); }
+        .glass-btn-3d.secondary { color: #8a5a6a; border-color: rgba(200,150,180,0.5); animation: glassPulsePink 3s ease-in-out infinite; }
+        @keyframes glassPulsePink { 0%,100% { box-shadow: 0 8px 32px rgba(200,150,180,0.3), inset 0 1px 0 rgba(255,255,255,0.8), 0 0 40px rgba(200,150,180,0.2); border-color: rgba(200,150,180,0.5); } 50% { box-shadow: 0 8px 48px rgba(200,150,180,0.5), inset 0 1px 0 rgba(255,255,255,1), 0 0 70px rgba(200,150,180,0.4); border-color: rgba(220,180,200,0.8); } }
+        .glass-btn-3d.secondary:hover { border-color: rgba(200,150,180,0.9); text-shadow: 0 0 12px rgba(200,150,180,0.5); animation: none; }
+
+        .glass-btn-3d.primary-submit {
+            color: #ffffff;
+            background: linear-gradient(135deg, rgba(40,200,100,0.5), rgba(20,140,70,0.4));
+            border-color: rgba(80,255,150,0.95);
+            text-shadow: 0 0 15px rgba(80,255,150,0.9);
+            box-shadow: 0 0 35px rgba(80,255,150,0.7), 0 0 60px rgba(40,200,100,0.4), inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -2px 0 rgba(0,0,0,0.2);
+            animation: greenPulse 2s ease-in-out infinite;
+            padding: 18px 40px; font-size: 17px;
+        }
+        @keyframes greenPulse {
+            0%,100% { box-shadow: 0 0 35px rgba(80,255,150,0.7), 0 0 60px rgba(40,200,100,0.4), inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -2px 0 rgba(0,0,0,0.2); }
+            50% { box-shadow: 0 0 55px rgba(100,255,180,1), 0 0 100px rgba(60,220,120,0.6), inset 0 1px 0 rgba(255,255,255,0.5), inset 0 -2px 0 rgba(0,0,0,0.2); }
+        }
+        .glass-btn-3d.primary-submit:hover { border-color: rgba(180,255,220,1); animation: none; box-shadow: 0 0 65px rgba(100,255,180,1), 0 0 110px rgba(80,255,150,0.8); }
+
+        .touch-btn { font-size: 28px !important; padding: 12px 22px !important; margin: 4px !important; min-width: 60px; min-height: 60px; display: flex; align-items: center; justify-content: center; border-radius: 16px !important; box-shadow: 0 4px 20px rgba(100,180,255,0.4), inset 0 1px 0 rgba(255,255,255,0.8), 0 0 30px rgba(100,180,255,0.2) !important; animation: glassPulse 3s ease-in-out infinite !important; touch-action: manipulation !important; }
+        .touch-btn:active { transform: scale(0.92) !important; box-shadow: 0 2px 8px rgba(100,180,255,0.6), inset 0 1px 0 rgba(255,255,255,0.6) !important; }
+
+        .title-main { font-size: clamp(36px,8vw,64px); font-weight: 800; background: linear-gradient(135deg,#4488cc 0%,#2266aa 50%,#4488cc 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; text-shadow: 0 0 40px rgba(68,136,204,0.3); margin-bottom: 16px; text-align: center; line-height: 1.1; z-index: 1; }
+        .subtitle { font-size: clamp(16px,3vw,22px); color: #4a6a8a; text-align: center; max-width: 600px; line-height: 1.6; margin-bottom: 20px; padding: 0 20px; z-index: 1; position: relative; text-shadow: 0 2px 4px rgba(255,255,255,0.8); }
+        .support-block { width: 100%; max-width: 95vw; background: rgba(255,255,255,0.6); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); border: 1px solid rgba(100,180,255,0.3); border-radius: 30px; padding: 10px 20px; z-index: 1; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 10px; font-size: 13px; color: #5a7a9a; text-align: center; margin-top: 20px; }
+        .support-block .highlight { color: #2a6aaa; font-weight: 800; }
+        .support-block .phone { color: #333; letter-spacing: 0.5px; font-weight: bold; }
+        .support-block .copy-btn { background: rgba(100,180,255,0.3); border: 1px solid #4488cc; color: #2a6aaa; padding: 4px 12px; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: bold; transition: all 0.2s; display: flex; align-items: center; gap: 4px; touch-action: manipulation; }
+        .support-block .copy-btn:hover { background: rgba(100,180,255,0.5); transform: scale(1.05); }
+        .support-block a { color: #2a6aaa; text-decoration: none; font-weight: bold; display: flex; align-items: center; gap: 4px; }
+
+        #game-hud { position: absolute; top: 20px; left: 20px; right: 20px; display: flex; justify-content: space-between; align-items: flex-start; pointer-events: none; z-index: 50; flex-wrap: wrap; gap: 10px; }
+        .hud-panel { background: rgba(255,255,255,0.7); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border: 1px solid rgba(100,180,255,0.4); border-radius: 16px; padding: 12px 20px; color: #333; font-size: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); pointer-events: auto; }
+        .hud-timer { font-size: 24px; font-weight: 800; color: #2a6aaa; text-shadow: 0 0 10px rgba(42,106,170,0.2); min-width: 80px; text-align: center; }
+        .hud-timer.warning { color: #cc4422; text-shadow: 0 0 10px rgba(204,68,34,0.4); animation: timerBlink 1s ease-in-out infinite; }
+        @keyframes timerBlink { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .result-label { font-size: 24px; color: #5a7a9a; text-transform: uppercase; letter-spacing: 2px; font-weight: 800; margin-bottom: 8px; }
+        .result-emoji { font-size: clamp(70px, 14vw, 120px); margin: 16px 0; filter: drop-shadow(0 0 20px rgba(0,255,100,0.6)); }
+        .result-emoji.snake-reward { animation: snakeGlow 2s ease-in-out infinite alternate; }
+        @keyframes snakeGlow {
+            from { filter: drop-shadow(0 0 20px rgba(0,255,100,0.6)); transform: scale(1); }
+            to { filter: drop-shadow(0 0 45px rgba(0,255,150,1)) drop-shadow(0 0 80px rgba(0,200,80,0.5)); transform: scale(1.08); }
+        }
+        .reward-text { font-size: clamp(18px, 4vw, 26px); color: #0a8a4a; font-weight: 800; text-shadow: 0 0 15px rgba(0,255,100,0.5); margin-bottom: 20px; text-transform: uppercase; letter-spacing: 1px; }
+
+        .confetti { position: fixed; top: -10px; z-index: 9999; pointer-events: none; border-radius: 2px; }
+
+        #touch-controls { position: absolute; bottom: 90px; left: 0; right: 0; display: flex; justify-content: space-around; align-items: center; padding: 0 12px; z-index: 55; pointer-events: none; flex-wrap: wrap; gap: 6px; }
+        #touch-controls > div { pointer-events: auto; display: flex; gap: 8px; align-items: center; }
+
+        @media (max-width:700px) {
+            .hud-panel { font-size: 13px; padding: 8px 14px; }
+            .hud-timer { font-size: 18px; }
+            .glass-btn-3d { padding: 14px 32px; font-size: 16px; margin: 8px; }
+            .lang-btn-3d { top: 15px; right: 15px; padding: 10px 18px; font-size: 14px; }
+            .voice-test-btn { top: 15px; left: 15px; padding: 8px 14px; font-size: 11px; }
+            .touch-btn { font-size: 22px !important; padding: 10px 16px !important; min-width: 54px; min-height: 54px; }
+            #touch-controls { bottom: 80px; padding: 0 6px; gap: 4px; }
+            .support-block { font-size: 11px; padding: 8px 14px; }
+        }
+
+        @media (max-width: 400px) {
+            .glass-btn-3d { padding: 12px 24px; font-size: 14px; }
+            .title-main { margin-bottom: 8px; }
+        }
+
+        @media (max-height: 500px) and (orientation: landscape) {
+            .page { padding: 10px; }
+            .title-main { font-size: 32px; margin-bottom: 8px; }
+            .subtitle { font-size: 14px; margin-bottom: 10px; }
+            .support-block { display: none; }
+            #touch-controls { bottom: 20px; }
+            .hud-timer { font-size: 20px; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="page-description" class="page active">
+    <button class="voice-test-btn" id="voiceTestBtn" onclick="testVoice()">🔊 Проверить голос</button>
+    <button class="lang-btn-3d" id="langToggleBtn" onclick="toggleLanguage()">RU / EN</button>
+    <img src="favicon.ico" alt="Логотип" style="width:144px;height:144px;margin-bottom:16px;border-radius:24px;box-shadow:0 0 30px rgba(68,136,204,0.4);border:2px solid rgba(255,255,255,0.6);z-index:1;">
+    <h1 class="title-main" id="txt-title1">Змея</h1>
+    <h1 class="title-main" id="txt-title2" style="font-size:clamp(32px,7vw,56px);margin-top:-10px;">И</h1>
+    <h1 class="title-main" id="txt-title3" style="font-size:clamp(32px,7vw,56px);margin-top:-10px;">Лабиринт</h1>
+    <div style="flex-grow:1;"></div>
+    <button class="glass-btn-3d" id="txt-startBtn" style="margin:0 auto 16px auto;z-index:1;">▶ Начать игру</button>
+    <div class="support-block">
+        <span class="highlight" id="txt-supportTitle">🤝 ПОДДЕРЖАТЬ ПРОЕКТ 💙</span>
+        <span id="txt-supportText1">Приложение бесплатное.</span>
+        <span id="txt-supportText2">Перевод: <strong class="phone">8-920-227-56-76</strong></span>
+        <button class="copy-btn" id="txt-copyBtn" onclick="copyPhone()">📋 Копировать</button>
+        <span id="txt-thanks">❤️ Спасибо!</span>
+        <a href="https://ancf-hue.github.io/" target="_blank" id="txt-catalog">👉 Каталог Anti-AI Shield</a>
+    </div>
+</div>
+
+<div id="page-game" class="page" style="justify-content:flex-start;">
+    <img src="favicon.ico" alt="Логотип" style="position:absolute;top:15px;left:50%;transform:translateX(-50%);width:96px;height:96px;border-radius:16px;z-index:60;box-shadow:0 4px 12px rgba(0,0,0,0.2);border:2px solid rgba(255,255,255,0.6);">
+    <div id="game-hud">
+        <div class="hud-panel hud-timer" id="timerDisplay">⏱ 3:00</div>
+    </div>
+    <div id="touch-controls">
+        <div><button class="touch-btn glass-btn-3d" data-action="left">◀</button><button class="touch-btn glass-btn-3d" data-action="right">▶</button></div>
+        <div><button class="touch-btn glass-btn-3d" data-action="forward">▲</button><button class="touch-btn glass-btn-3d" data-action="backward">▼</button></div>
+    </div>
+</div>
+
+<div id="page-result" class="page">
+    <div class="page-bg"></div>
+    <img src="favicon.ico" alt="Логотип" style="width:128px;height:128px;margin-bottom:16px;border-radius:20px;box-shadow:0 4px 12px rgba(0,0,0,0.15);border:2px solid rgba(255,255,255,0.6);">
+    <div class="result-label" id="result-label">⏱ Время вышло!</div>
+    <div class="result-emoji" id="result-emoji">⏱</div>
+
+    <div id="win-block" style="display: none; text-align: center; width: 100%; max-width: 500px;">
+        <div class="reward-text" id="reward-text">🎁 Награда: Красная змея!</div>
+        <p class="subtitle" id="result-text-win">Ты успешно выбрался из лабиринта!</p>
+
+        <button class="glass-btn-3d primary-submit" id="txt-goToBoard" onclick="goToLeaderboard()">
+            🏆 Отправить на Доску почёта →
+        </button>
+
+        <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 12px;">
+            <button class="glass-btn-3d secondary" id="txt-playAgain2" onclick="startGame()" style="padding: 12px 24px; font-size: 14px;">🔄 Ещё раз</button>
+            <button class="glass-btn-3d secondary" id="txt-menu2" onclick="showPage('page-description')" style="padding: 12px 24px; font-size: 14px;">🏠 В меню</button>
+        </div>
+    </div>
+
+    <div id="lose-block" style="display: none; text-align: center;">
+        <p class="subtitle" id="result-text-lose">Не удалось найти выход вовремя. Попробуйте ещё раз!</p>
+        <div style="display: flex; flex-wrap: wrap; justify-content: center; margin-top: 20px;">
+            <button class="glass-btn-3d" id="txt-playAgain" onclick="startGame()">🔄 Играть снова</button>
+            <button class="glass-btn-3d secondary" id="txt-menu" onclick="showPage('page-description')">🏠 В меню</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ===== ПРОВЕРКА ПОДДЕРЖКИ WebGL =====
+(function() {
+    try {
+        var c = document.createElement('canvas');
+        var gl = c.getContext('webgl') || c.getContext('experimental-webgl');
+        if (!gl) {
+            document.body.innerHTML = '<div style="padding:40px;text-align:center;font-family:sans-serif;"><h1>⚠️</h1><p>Ваш браузер не поддерживает WebGL. Обновите браузер или устройство.</p></div>';
+            throw new Error('WebGL not supported');
+        }
+    } catch(e) { throw e; }
+})();
+
+// ===== ПРОВЕРКА, ЧТО THREE ЗАГРУЗИЛСЯ =====
+if (typeof THREE === 'undefined') {
+    document.body.innerHTML = '<div style="padding:40px;text-align:center;font-family:sans-serif;"><h1>⚠️</h1><p>Не удалось загрузить движок игры (Three.js). Проверьте соединение с интернетом и обновите страницу.</p></div>';
+    throw new Error('THREE not loaded');
+}
+
+// ===== ОПРЕДЕЛЕНИЕ МОБИЛЬНОГО / СЛАБОГО УСТРОЙСТВА =====
+const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+function detectLowEnd() {
+    try {
+        const ua = navigator.userAgent || '';
+        if (/Android [1-7]\./.test(ua)) return true;
+        if (/iPhone OS [1-9]_|iPhone OS 1[0-2]_/.test(ua)) return true;
+        if (/Windows Phone/.test(ua)) return true;
+        if (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2) return true;
+        if (navigator.deviceMemory && navigator.deviceMemory < 2) return true;
+    } catch(e) {}
+    return false;
+}
+const IS_LOW_END = detectLowEnd();
+console.log('📱 Устройство:', isMobile ? 'мобильное' : 'десктоп', '|', IS_LOW_END ? 'слабое (облегчённая графика)' : 'мощное (полная графика)');
+
+THREE.OrbitControls = function(object, domElement) {
+    this.object = object;
+    this.domElement = domElement;
+    this.enabled = true;
+    this.target = new THREE.Vector3();
+    this.enableDamping = true;
+    this.dampingFactor = 0.08;
+    this.enableZoom = false;
+    this.enableRotate = false;
+    this.enablePan = false;
+    this.update = function() {
+        this.object.lookAt(this.target);
+    };
+};
+
+console.log('🎮 Игра "Змея и Лабиринт" загружается...');
+
+// ===== ПЕРЕВОДЫ =====
+const MAIN_LEADERBOARD_URL = "https://anti-ii-zmeya-vse-igry.vercel.app/";
+const GAME_NAME_FOR_BOARD = "🐍 - 🧩 Змея и Лабиринт";
+const REWARD_SNAKES_ON_WIN = 1;
+
+let currentLang = 'ru';
+
+const translations = {
+    ru: {
+        title1: "Змея", title2: "И", title3: "Лабиринт",
+        startBtn: "▶ Начать игру",
+        supportTitle: "🤝 ПОДДЕРЖАТЬ ПРОЕКТ 💙",
+        supportText1: "Приложение бесплатное.",
+        supportText2: "Перевод:",
+        copyBtn: "📋 Копировать",
+        copiedBtn: "✅ Скопировано!",
+        thanks: "❤️ Спасибо!",
+        catalog: "👉 Каталог Anti-AI Shield",
+        playAgain: "🔄 Играть снова",
+        playAgain2: "🔄 Ещё раз",
+        menu: "🏠 В меню",
+        goToLeaderboard: "🏆 Отправить на Доску почёта →",
+        resultWinLabel: "🎉 ПОБЕДА!",
+        resultTimeLabel: "⏱ ВРЕМЯ ВЫШЛО!",
+        resultWinText: "Ты успешно выбрался из лабиринта!",
+        rewardText: "🎁 Награда: Красная змея!",
+        resultTimeText: "Не удалось найти выход вовремя. Попробуйте ещё раз!",
+        ttsWin: "Поздравляю! Ты нашёл выход из лабиринта!",
+        ttsTime: "Время вышло. Попробуйте ещё раз.",
+        ttsStart: "Игра началась! Найди ярко-зелёный выход из лабиринта!",
+        ttsTest: "Озвучка работает. Удачи в игре!"
+    },
+    en: {
+        title1: "Snake", title2: "And", title3: "Labyrinth",
+        startBtn: "▶ Start Game",
+        supportTitle: "🤝 SUPPORT THE PROJECT 💙",
+        supportText1: "The app is free.",
+        supportText2: "Transfer:",
+        copyBtn: "📋 Copy",
+        copiedBtn: "✅ Copied!",
+        thanks: "❤️ Thank you!",
+        catalog: "👉 Anti-AI Shield Catalog",
+        playAgain: "🔄 Play Again",
+        playAgain2: "🔄 Again",
+        menu: "🏠 Menu",
+        goToLeaderboard: "🏆 To Hall of Fame →",
+        resultWinLabel: "🎉 VICTORY!",
+        resultTimeLabel: "⏱ TIME'S UP!",
+        resultWinText: "You escaped the labyrinth successfully!",
+        rewardText: "🎁 Reward: Red Snake!",
+        resultTimeText: "Could not find the exit in time. Try again!",
+        ttsWin: "Congratulations! You found the exit from the labyrinth!",
+        ttsTime: "Time is up. Try again.",
+        ttsStart: "Game started! Find the bright green exit from the labyrinth!",
+        ttsTest: "Voice works. Good luck in the game!"
+    }
+};
+
+// ===== TTS =====
+let ttsUnlocked = false;
+let cachedVoice = null;
+let speakCounter = 0;
+
+function warmUpTTS() {
+    if (!('speechSynthesis' in window)) return;
+    const pickVoice = () => {
+        const voices = window.speechSynthesis.getVoices();
+        if (!voices || voices.length === 0) return;
+        const prefix = currentLang === 'ru' ? 'ru' : 'en';
+        cachedVoice =
+            voices.find(v => v.lang && v.lang.toLowerCase().startsWith(prefix) && v.localService) ||
+            voices.find(v => v.lang && v.lang.toLowerCase().startsWith(prefix)) ||
+            null;
+        console.log('🎙️ Голос для', currentLang, ':', cachedVoice ? cachedVoice.name + ' (' + cachedVoice.lang + ')' : 'по умолчанию');
+    };
+    pickVoice();
+    window.speechSynthesis.onvoiceschanged = pickVoice;
+}
+warmUpTTS();
+
+function unlockTTS() {
+    if (ttsUnlocked || !('speechSynthesis' in window)) return;
+    try {
+        const u = new SpeechSynthesisUtterance(' ');
+        u.volume = 0.01;
+        u.rate = 2;
+        u.lang = currentLang === 'ru' ? 'ru-RU' : 'en-US';
+        window.speechSynthesis.speak(u);
+        ttsUnlocked = true;
+        console.log('🔊 TTS разблокирован');
+    } catch(e) { console.warn('TTS unlock failed:', e); }
+}
+
+document.addEventListener('touchstart', unlockTTS, { once: true, passive: true });
+document.addEventListener('click',      unlockTTS, { once: true });
+document.addEventListener('keydown',    unlockTTS, { once: true });
+
+function speakText(textKey) {
+    if (!('speechSynthesis' in window)) {
+        console.warn('⚠️ speechSynthesis не поддерживается');
+        return;
+    }
+    const textToSpeak = translations[currentLang][textKey];
+    if (!textToSpeak) {
+        console.warn('⚠️ Отсутствует текст для озвучки ключа:', textKey);
+        return;
+    }
+    const lang = currentLang === 'ru' ? 'ru-RU' : 'en-US';
+    const myId = ++speakCounter;
+
+    try {
+        window.speechSynthesis.cancel();
+        setTimeout(() => {
+            if (myId !== speakCounter) return;
+            try {
+                const u = new SpeechSynthesisUtterance(textToSpeak);
+                u.lang = lang;
+                u.rate = 1.05;
+                u.pitch = 1.0;
+                u.volume = 1.0;
+
+                // Fallback-поиск голоса: если кэш пуст — ищем свежий
+                let voice = cachedVoice;
+                if (!voice) {
+                    const voices = window.speechSynthesis.getVoices();
+                    const prefix = currentLang === 'ru' ? 'ru' : 'en';
+                    voice = voices.find(v => v.lang && v.lang.toLowerCase().startsWith(prefix)) || null;
+                    if (voice) cachedVoice = voice;
+                }
+                if (voice) u.voice = voice;
+
+                console.log('🗣️ Говорю:', textToSpeak, '| голос:', u.voice ? u.voice.name : 'default');
+                window.speechSynthesis.speak(u);
+            } catch(e) { console.error('speak error:', e); }
+        }, 80);
+    } catch(e) { console.error('speakText error:', e); }
+}
+
+window.testVoice = function() {
+    unlockTTS();
+    initAudio();
+    playTone(880, 0.08, 'sine', 0.15);
+    setTimeout(() => speakText('ttsTest'), 200);
+};
+
+window.toggleLanguage = function() {
+    currentLang = currentLang === 'ru' ? 'en' : 'ru';
+    document.getElementById('langToggleBtn').textContent = currentLang === 'ru' ? 'RU / EN' : 'EN / RU';
+    cachedVoice = null;
+    warmUpTTS();
+    updateLanguage();
+};
+
+function updateLanguage() {
+    const t = translations[currentLang];
+    document.getElementById('txt-title1').textContent = t.title1;
+    document.getElementById('txt-title2').textContent = t.title2;
+    document.getElementById('txt-title3').textContent = t.title3;
+    document.getElementById('txt-startBtn').textContent = t.startBtn;
+    document.getElementById('txt-supportTitle').textContent = t.supportTitle;
+    document.getElementById('txt-supportText1').textContent = t.supportText1;
+    document.getElementById('txt-supportText2').innerHTML = `${t.supportText2} <strong class="phone">8-920-227-56-76</strong>`;
+    document.getElementById('txt-copyBtn').textContent = t.copyBtn;
+    document.getElementById('txt-thanks').textContent = t.thanks;
+    document.getElementById('txt-catalog').textContent = t.catalog;
+    document.getElementById('txt-playAgain').textContent = t.playAgain;
+    document.getElementById('txt-playAgain2').textContent = t.playAgain2;
+    document.getElementById('txt-menu').textContent = t.menu;
+    document.getElementById('txt-menu2').textContent = t.menu;
+    document.getElementById('txt-goToBoard').textContent = t.goToLeaderboard;
+}
+
+window.copyPhone = function() {
+    const phone = "8-920-227-56-76";
+    const t = translations[currentLang];
+    const btn = document.getElementById('txt-copyBtn');
+    const showCopied = () => {
+        if (btn) {
+            btn.textContent = t.copiedBtn;
+            btn.style.background = "rgba(100,180,255,0.5)";
+            btn.style.color = "#fff";
+            setTimeout(() => {
+                btn.textContent = t.copyBtn;
+                btn.style.background = "rgba(100,180,255,0.3)";
+                btn.style.color = "#2a6aaa";
+            }, 2000);
+        }
+    };
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(phone).then(showCopied).catch(fallbackCopy);
+    } else {
+        fallbackCopy();
+    }
+    function fallbackCopy() {
+        try {
+            const textArea = document.createElement("textarea");
+            textArea.value = phone;
+            textArea.style.position = "fixed";
+            textArea.style.left = "-9999px";
+            textArea.style.top = "0";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            document.execCommand("copy");
+            document.body.removeChild(textArea);
+            showCopied();
+        } catch(e) { alert(phone); }
+    }
+};
+
+function createSignedToken(game, snakes) {
+    const nonce = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    const timestamp = Date.now();
+    const data = { g: game, s: snakes, t: timestamp, n: nonce };
+    const sig = btoa(unescape(encodeURIComponent(
+        data.g + '|' + data.s + '|' + data.t + '|' + data.n + '|AntonKuznetsovSnakeProject2026'
+    )));
+    data.sig = sig;
+    return btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+}
+
+window.goToLeaderboard = function() {
+    const token = createSignedToken(GAME_NAME_FOR_BOARD, REWARD_SNAKES_ON_WIN);
+    const targetUrl = MAIN_LEADERBOARD_URL + "?reward=" + token;
+    const newWindow = window.open(targetUrl, '_blank');
+    if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+        window.location.href = targetUrl;
+    }
+};
+
+function startConfetti() {
+    const colors = ['#00ff88', '#44ffaa', '#88ffcc', '#00cc66', '#44dd88', '#aaffdd', '#22ee77'];
+    const count = IS_LOW_END ? 40 : 100;
+    for (let i = 0; i < count; i++) {
+        const conf = document.createElement('div');
+        conf.className = 'confetti';
+        conf.style.left = Math.random() * 100 + 'vw';
+        conf.style.width = (Math.random() * 10 + 5) + 'px';
+        conf.style.height = (Math.random() * 10 + 5) + 'px';
+        conf.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+        conf.style.transition = `top ${Math.random() * 2 + 2}s linear, transform ${Math.random() * 2 + 2}s linear, opacity 2s`;
+        document.body.appendChild(conf);
+        setTimeout(() => {
+            conf.style.top = '110vh';
+            conf.style.transform = `rotate(${Math.random() * 720}deg) translateX(${(Math.random() - 0.5) * 200}px)`;
+            conf.style.opacity = '0';
+        }, 50);
+        setTimeout(() => { if (conf.parentNode) conf.remove(); }, 4500);
+    }
+}
+
+// ===== АУДИО =====
+let audioCtx = null;
+function initAudio() {
+    if (!audioCtx) {
+        try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+    }
+    if (audioCtx && audioCtx.state === 'suspended') {
+        try { audioCtx.resume(); } catch(e) {}
+    }
+}
+function playTone(f, d, type='sine', vol=0.3) {
+    if (!audioCtx) return;
+    try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(f, audioCtx.currentTime);
+        gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + d);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + d);
+    } catch(e) {}
+}
+function playWinSound() {
+    initAudio(); if (!audioCtx) return;
+    [523,659,784,1046].forEach((f,i)=>setTimeout(()=>playTone(f,0.15,'sine',0.3),i*100));
+}
+let lastBumpTime = 0;
+function playBumpSound() {
+    const now = performance.now();
+    if (now - lastBumpTime < 250) return;
+    lastBumpTime = now;
+    initAudio(); if (!audioCtx) return;
+    playTone(150, 0.1, 'triangle', 0.2);
+}
+
+const initMediaHandler = () => { initAudio(); unlockTTS(); };
+document.addEventListener('click', initMediaHandler, {once:true});
+document.addEventListener('touchstart', initMediaHandler, {once:true});
+document.addEventListener('keydown', initMediaHandler, {once:true});
+
+let isGameActive = false;
+let timerInterval = null;
+let gameTimeLeft = 180;
+const MAX_TIME = 180;
+let gameOver = false;
+
+const _desiredCamPos = new THREE.Vector3();
+const _cameraOffset = new THREE.Vector3(0, 35, 28);
+
+const sceneColor = 0xddeeff;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(sceneColor);
+scene.fog = new THREE.Fog(sceneColor, 20, IS_LOW_END ? 70 : 100);
+
+const camera = new THREE.PerspectiveCamera(55, window.innerWidth/window.innerHeight, 0.1, IS_LOW_END ? 150 : 300);
+camera.position.set(0, 35, 28);
+
+// ===== РЕНДЕРЕР с адаптивными настройками =====
+const renderer = new THREE.WebGLRenderer({
+    antialias: !IS_LOW_END,
+    alpha: true,
+    powerPreference: 'high-performance'
+});
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = IS_LOW_END ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
+renderer.shadowMap.bias = 0.0005;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.5;
+// Мобильные: pixelRatio 1.5 (баланс качества и FPS). Слабые: 1. Десктоп: до 2.
+renderer.setPixelRatio(IS_LOW_END ? 1 : Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2));
+renderer.domElement.style.position = 'fixed';
+renderer.domElement.style.top = '0';
+renderer.domElement.style.left = '0';
+renderer.domElement.style.zIndex = '1';
+renderer.domElement.style.touchAction = 'none';
+renderer.domElement.style.display = 'none';
+document.body.appendChild(renderer.domElement);
+
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+// ===== ОСВЕЩЕНИЕ =====
+const hemiLight = new THREE.HemisphereLight(0xaaddff, 0x88bbdd, 1.2);
+scene.add(hemiLight);
+const ambient = new THREE.AmbientLight(0xffffff, 0.8);
+scene.add(ambient);
+const mainLight = new THREE.DirectionalLight(0xffffff, 2.0);
+mainLight.position.set(30, 50, 30);
+mainLight.castShadow = true;
+// Адаптивный размер карты теней: 512 / 1024 / 2048
+const SHADOW_SIZE = IS_LOW_END ? 512 : (isMobile ? 1024 : 2048);
+mainLight.shadow.mapSize.width = SHADOW_SIZE;
+mainLight.shadow.mapSize.height = SHADOW_SIZE;
+mainLight.shadow.camera.near = 0.5;
+mainLight.shadow.camera.far = 200;
+mainLight.shadow.camera.left = -60;
+mainLight.shadow.camera.right = 60;
+mainLight.shadow.camera.top = 60;
+mainLight.shadow.camera.bottom = -60;
+scene.add(mainLight);
+
+const MAZE_SIZE = 27;
+const CELL_SIZE = 3;
+const MAZE_OFFSET = (MAZE_SIZE * CELL_SIZE) / 2;
+let mazeGrid = [];
+let walls = [];
+let wallGrid = [];
+let exitBeacon = null;
+
+// Хранилища для dispose (предотвращаем утечку памяти)
+let sharedWallGeo = null, sharedWallMat = null;
+let sharedFloorGeo = null, sharedFloorMat = null;
+let currentFloor = null;
+let currentExitTile = null;
+let exitBeamMesh = null;
+let exitBeamMat = null;
+let exitParticles = null;
+
+function disposeMazeResources() {
+    // Удаляем все стены со сцены
+    walls.forEach(w => scene.remove(w));
+    walls = [];
+
+    // Освобождаем общие ресурсы стен (один раз вместо 729 вызовов)
+    if (sharedWallGeo) { sharedWallGeo.dispose(); sharedWallGeo = null; }
+    if (sharedWallMat) { sharedWallMat.dispose(); sharedWallMat = null; }
+
+    // Пол
+    if (currentFloor) {
+        scene.remove(currentFloor);
+        if (currentFloor.geometry) currentFloor.geometry.dispose();
+        if (currentFloor.material) currentFloor.material.dispose();
+        currentFloor = null;
+    }
+    if (sharedFloorGeo) { sharedFloorGeo.dispose(); sharedFloorGeo = null; }
+    if (sharedFloorMat) { sharedFloorMat.dispose(); sharedFloorMat = null; }
+
+    // Плитка выхода
+    if (currentExitTile) {
+        scene.remove(currentExitTile);
+        if (currentExitTile.geometry) currentExitTile.geometry.dispose();
+        if (currentExitTile.material) currentExitTile.material.dispose();
+        currentExitTile = null;
+    }
+
+    // Маяк выхода (beacon + beam + light + particles)
+    if (exitBeacon) {
+        scene.remove(exitBeacon);
+        if (exitBeamMesh) {
+            exitBeamMesh.geometry.dispose();
+            if (exitBeamMat) { exitBeamMat.dispose(); exitBeamMat = null; }
+            exitBeamMesh = null;
+        }
+        if (exitParticles) {
+            exitParticles.geometry.dispose();
+            if (exitParticles.material) exitParticles.material.dispose();
+            exitParticles = null;
+        }
+        if (exitBeacon.geometry) exitBeacon.geometry.dispose();
+        if (exitBeacon.material) exitBeacon.material.dispose();
+        exitBeacon = null;
+    }
+}
+
+function buildWallGrid() {
+    const gridSize = MAZE_SIZE * 2 + 4;
+    wallGrid = Array(gridSize).fill().map(() => Array(gridSize).fill(false));
+    for (let w of walls) {
+        const gridX = Math.round((w.position.x + MAZE_OFFSET) / (CELL_SIZE / 2));
+        const gridZ = Math.round((w.position.z + MAZE_OFFSET) / (CELL_SIZE / 2));
+        if (gridX >= 0 && gridX < gridSize && gridZ >= 0 && gridZ < gridSize) {
+            wallGrid[gridX][gridZ] = true;
+        }
+    }
+}
+
+function generateMaze() {
+    // ===== ПОЛНАЯ ОЧИСТКА ПАМЯТИ =====
+    disposeMazeResources();
+
+    mazeGrid = Array(MAZE_SIZE).fill().map(() => Array(MAZE_SIZE).fill(1));
+    const stack = [];
+    const startX = 1, startY = 1;
+    mazeGrid[startY][startX] = 0;
+    stack.push({x: startX, y: startY});
+    const directions = [{dx: 0, dy: -2}, {dx: 0, dy: 2}, {dx: -2, dy: 0}, {dx: 2, dy: 0}];
+    
+    while (stack.length > 0) {
+        const current = stack[stack.length - 1];
+        const neighbors = [];
+        for (let dir of directions) {
+            const nx = current.x + dir.dx, ny = current.y + dir.dy;
+            if (nx > 0 && nx < MAZE_SIZE - 1 && ny > 0 && ny < MAZE_SIZE - 1 && mazeGrid[ny][nx] === 1) {
+                neighbors.push({x: nx, y: ny, dx: dir.dx, dy: dir.dy});
+            }
+        }
+        if (neighbors.length > 0) {
+            const chosen = neighbors[Math.floor(Math.random() * neighbors.length)];
+            mazeGrid[chosen.y][chosen.x] = 0;
+            mazeGrid[current.y + chosen.dy / 2][current.x + chosen.dx / 2] = 0;
+            stack.push({x: chosen.x, y: chosen.y});
+        } else {
+            stack.pop();
+        }
+    }
+    
+    const candidates = [];
+    let maxDist = 0;
+    for (let y = 1; y < MAZE_SIZE - 1; y++) {
+        for (let x = 1; x < MAZE_SIZE - 1; x++) {
+            if (mazeGrid[y][x] === 0) {
+                const d = Math.abs(x - startX) + Math.abs(y - startY);
+                if (d > maxDist) maxDist = d;
+                candidates.push({x, y, d});
+            }
+        }
+    }
+    const minD = Math.floor(maxDist * 0.55);
+    let pool = candidates.filter(c => c.d >= minD);
+    if (pool.length === 0) pool = candidates;
+    const exitCell = pool[Math.floor(Math.random() * pool.length)];
+    const exitX = exitCell.x, exitY = exitCell.y;
+
+    const wallHeight = 1.3, wallY = -1.6 + wallHeight/2;
+
+    // ===== ЛЁГКИЙ МАТЕРИАЛ НА СЛАБЫХ УСТРОЙСТВАХ (Lambert вместо Standard) =====
+    sharedWallGeo = new THREE.BoxGeometry(CELL_SIZE, wallHeight, CELL_SIZE);
+    sharedWallMat = IS_LOW_END
+        ? new THREE.MeshLambertMaterial({ color: 0xeeeeff })
+        : new THREE.MeshStandardMaterial({ color: 0xeeeeff, roughness: 0.4, metalness: 0.1 });
+    
+    for (let y = 0; y < MAZE_SIZE; y++) {
+        for (let x = 0; x < MAZE_SIZE; x++) {
+            if (mazeGrid[y][x] === 1) {
+                const wall = new THREE.Mesh(sharedWallGeo, sharedWallMat);
+                wall.position.set(x * CELL_SIZE - MAZE_OFFSET, wallY, y * CELL_SIZE - MAZE_OFFSET);
+                wall.castShadow = !IS_LOW_END;
+                wall.receiveShadow = !IS_LOW_END;
+                scene.add(wall);
+                walls.push(wall);
+            }
+        }
+    }
+    
+    sharedFloorGeo = new THREE.PlaneGeometry(MAZE_SIZE * CELL_SIZE + 4, MAZE_SIZE * CELL_SIZE + 4);
+    sharedFloorMat = IS_LOW_END
+        ? new THREE.MeshLambertMaterial({ color: 0xddeeff })
+        : new THREE.MeshStandardMaterial({ color: 0xddeeff, roughness: 0.6, metalness: 0.2 });
+    currentFloor = new THREE.Mesh(sharedFloorGeo, sharedFloorMat);
+    currentFloor.rotation.x = -Math.PI / 2;
+    currentFloor.position.y = -1.6;
+    currentFloor.receiveShadow = !IS_LOW_END;
+    scene.add(currentFloor);
+
+    // Плитка выхода — на слабых Basic, на мощных Standard
+    const exitTileGeo = new THREE.PlaneGeometry(CELL_SIZE * 0.9, CELL_SIZE * 0.9);
+    const exitTileMat = IS_LOW_END
+        ? new THREE.MeshBasicMaterial({ color: 0x00ff44, transparent: true, opacity: 0.95 })
+        : new THREE.MeshStandardMaterial({
+            color: 0x00ff44, emissive: 0x00ff44, emissiveIntensity: 1.5,
+            transparent: true, opacity: 0.95, roughness: 0.2, metalness: 0.1
+        });
+    currentExitTile = new THREE.Mesh(exitTileGeo, exitTileMat);
+    currentExitTile.rotation.x = -Math.PI / 2;
+    currentExitTile.position.set(exitX * CELL_SIZE - MAZE_OFFSET, -1.55, exitY * CELL_SIZE - MAZE_OFFSET);
+    scene.add(currentExitTile);
+    
+    const beaconGeo = new THREE.CylinderGeometry(1.2, 1.2, 0.2, IS_LOW_END ? 16 : 32);
+    const beaconMat = new THREE.MeshBasicMaterial({ color: 0x00ff44, transparent: true, opacity: 1.0 });
+    exitBeacon = new THREE.Mesh(beaconGeo, beaconMat);
+    exitBeacon.position.set(exitX * CELL_SIZE - MAZE_OFFSET, -1.5, exitY * CELL_SIZE - MAZE_OFFSET);
+    
+    const beamGeo = new THREE.CylinderGeometry(0.7, 0.7, 40, IS_LOW_END ? 8 : 16, 1, true);
+    exitBeamMat = new THREE.MeshBasicMaterial({ color: 0x00ff44, transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false });
+    exitBeamMesh = new THREE.Mesh(beamGeo, exitBeamMat);
+    exitBeamMesh.position.y = 20;
+    exitBeacon.add(exitBeamMesh);
+    
+    const beaconLight = new THREE.PointLight(0x00ff44, 8, 35);
+    beaconLight.position.set(0, 2, 0);
+    exitBeacon.add(beaconLight);
+    
+    if (!IS_LOW_END) {
+        const particleCount = 60;
+        const pGeo = new THREE.BufferGeometry();
+        const pPos = new Float32Array(particleCount * 3);
+        for(let i=0; i<particleCount*3; i++) pPos[i] = (Math.random() - 0.5) * 5;
+        pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+        const pMat = new THREE.PointsMaterial({ color: 0x44ff88, size: 0.3, transparent: true, opacity: 1.0 });
+        exitParticles = new THREE.Points(pGeo, pMat);
+        exitBeacon.add(exitParticles);
+        exitBeacon.userData = { particles: exitParticles, light: beaconLight, baseY: -1.5, beam: exitBeamMat, hasParticles: true };
+    } else {
+        exitBeacon.userData = { light: beaconLight, baseY: -1.5, beam: exitBeamMat, hasParticles: false };
+    }
+    
+    scene.add(exitBeacon);
+    buildWallGrid();
+    return { startX: startX * CELL_SIZE - MAZE_OFFSET, startZ: startY * CELL_SIZE - MAZE_OFFSET };
+}
+
+const snakeGroup = new THREE.Group();
+scene.add(snakeGroup);
+const MAX_SEGMENTS = 60;
+let activeSegments = 35;
+const BASE_SEGMENT_RADIUS = 0.45;
+const SEGMENT_SPACING = 0.4;
+const snakeBody = [];
+const SPHERE_DETAIL = IS_LOW_END ? 12 : 24;
+
+// ===== ЛЁГКИЙ МАТЕРИАЛ ДЛЯ ЗМЕИ НА СЛАБЫХ УСТРОЙСТВАХ =====
+const bodyMatGlass = IS_LOW_END
+    ? new THREE.MeshLambertMaterial({ color: 0xc82020, transparent: true, opacity: 0.85, emissive: 0x440000 })
+    : new THREE.MeshStandardMaterial({ color: 0xc82020, roughness: 0.2, metalness: 0.8, transparent: true, opacity: 0.85, emissive: 0x880000, emissiveIntensity: 0.6 });
+
+const baseRadii = [];
+for (let i = 0; i < MAX_SEGMENTS; i++) {
+    baseRadii.push(BASE_SEGMENT_RADIUS * (1 - (i / (MAX_SEGMENTS - 1)) * 0.7));
+}
+for (let i = 0; i < MAX_SEGMENTS; i++) {
+    const geo = new THREE.SphereGeometry(baseRadii[i], SPHERE_DETAIL, SPHERE_DETAIL);
+    const mesh = new THREE.Mesh(geo, bodyMatGlass.clone());
+    mesh.castShadow = !IS_LOW_END;
+    mesh.receiveShadow = false;
+    snakeGroup.add(mesh);
+    snakeBody.push(mesh);
+    mesh.visible = i < activeSegments;
+}
+
+const headMat = IS_LOW_END
+    ? new THREE.MeshLambertMaterial({ color: 0xe03030, transparent: true, opacity: 0.9, emissive: 0x660000 })
+    : new THREE.MeshStandardMaterial({ color: 0xe03030, roughness: 0.2, metalness: 0.8, transparent: true, opacity: 0.85, emissive: 0xaa2222, emissiveIntensity: 0.8 });
+const headGeo = new THREE.SphereGeometry(0.85, SPHERE_DETAIL + 12, SPHERE_DETAIL + 12);
+headGeo.scale(1, 0.85, 1.45);
+const head = new THREE.Mesh(headGeo, headMat);
+head.castShadow = !IS_LOW_END;
+snakeGroup.add(head);
+
+const headLight = new THREE.PointLight(0xff6644, 3.0, 20);
+headLight.position.set(0, 1.5, 2.5);
+head.add(headLight);
+
+function createEye(ox, oy, oz) {
+    const g = new THREE.Group();
+    const white = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 16), new THREE.MeshBasicMaterial({ color: 0xf8f8ff }));
+    white.scale.set(1, 1.1, 0.9); g.add(white);
+    const iris = new THREE.Mesh(new THREE.SphereGeometry(0.14, 12, 12), new THREE.MeshBasicMaterial({ color: 0xffcc00 }));
+    iris.position.z = 0.16; iris.scale.set(1, 1.2, 0.5); g.add(iris);
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 10), new THREE.MeshBasicMaterial({ color: 0x111111 }));
+    pupil.scale.set(0.5, 1.6, 0.4); pupil.position.z = 0.22; g.add(pupil);
+    g.position.set(ox, oy, oz); return g;
+}
+head.add(createEye(-0.4, 0.35, 0.75));
+head.add(createEye(0.4, 0.35, 0.75));
+
+const HEAD_ATTACH = 0.9;
+const segmentPositions = [];
+for (let i = 0; i < MAX_SEGMENTS; i++) segmentPositions.push(new THREE.Vector3(-i * SEGMENT_SPACING, 0, 0));
+const headPos = new THREE.Vector3(0, 0, 0);
+let dirAngle = Math.PI / 2;
+let targetAngle = Math.PI / 2;
+const moveDir = new THREE.Vector3(1, 0, 0);
+const BASE_SPEED = 5.0;
+let speedMult = 1.0;
+
+document.addEventListener('keydown', (e) => {
+    if (!isGameActive || gameOver || e.repeat) return;
+    let newAngle = null;
+    if (e.key === 'ArrowLeft' || e.key === 'a') newAngle = dirAngle + Math.PI / 2;
+    else if (e.key === 'ArrowRight' || e.key === 'd') newAngle = dirAngle - Math.PI / 2;
+    else if (e.key === 'ArrowUp' || e.key === 'w') { speedMult = Math.min(2.0, speedMult + 0.5); e.preventDefault(); return; }
+    else if (e.key === 'ArrowDown' || e.key === 's') { speedMult = Math.max(0.0, speedMult - 0.5); e.preventDefault(); return; }
+    
+    if (newAngle !== null) {
+        targetAngle = Math.atan2(Math.sin(newAngle), Math.cos(newAngle));
+        e.preventDefault();
+    }
+});
+
+function setupTouchControls() {
+    const btns = document.querySelectorAll('.touch-btn');
+    const actions = {
+        left: () => { targetAngle = dirAngle + Math.PI / 2; },
+        right: () => { targetAngle = dirAngle - Math.PI / 2; },
+        forward: () => { if (isGameActive && !gameOver) speedMult = Math.min(2.0, speedMult + 0.5); },
+        backward: () => { if (isGameActive && !gameOver) speedMult = Math.max(0.0, speedMult - 0.5); }
+    };
+    btns.forEach(btn => {
+        const action = btn.dataset.action;
+        if (!action) return;
+        const start = (e) => {
+            e.preventDefault();
+            if (!isGameActive || gameOver) return;
+            if (actions[action]) actions[action]();
+        };
+        btn.addEventListener('touchstart', start, { passive: false });
+        btn.addEventListener('touchend', (e) => { e.preventDefault(); }, { passive: false });
+        btn.addEventListener('touchcancel', (e) => { e.preventDefault(); }, { passive: false });
+        btn.addEventListener('mousedown', start);
+        btn.addEventListener('mouseup', (e) => e.preventDefault());
+        btn.addEventListener('mouseleave', (e) => e.preventDefault());
+    });
+}
+setTimeout(setupTouchControls, 100);
+
+function checkWallCollision(newX, newZ) {
+    const headRadius = 0.85;
+    const wallHalfSize = CELL_SIZE / 2;
+    const gridX = Math.round((newX + MAZE_OFFSET) / (CELL_SIZE / 2));
+    const gridZ = Math.round((newZ + MAZE_OFFSET) / (CELL_SIZE / 2));
+    const gridSize = MAZE_SIZE * 2 + 4;
+    
+    for (let di = -2; di <= 2; di++) {
+        for (let dj = -2; dj <= 2; dj++) {
+            const gi = gridX + di;
+            const gj = gridZ + dj;
+            if (gi < 0 || gi >= gridSize || gj < 0 || gj >= gridSize) continue;
+            if (!wallGrid[gi] || !wallGrid[gi][gj]) continue;
+            
+            const wx = gi * (CELL_SIZE / 2) - MAZE_OFFSET;
+            const wz = gj * (CELL_SIZE / 2) - MAZE_OFFSET;
+            if (Math.abs(newX - wx) < (wallHalfSize + headRadius) && Math.abs(newZ - wz) < (wallHalfSize + headRadius)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+function pushSegmentOutOfWalls(x, z, radius) {
+    let finalX = x, finalZ = z;
+    const wallHalfSize = CELL_SIZE / 2;
+    const minBound = -MAZE_OFFSET + CELL_SIZE + radius;
+    const maxBound = MAZE_OFFSET - CELL_SIZE - radius;
+    finalX = Math.max(minBound, Math.min(maxBound, finalX));
+    finalZ = Math.max(minBound, Math.min(maxBound, finalZ));
+    
+    const gridX = Math.round((finalX + MAZE_OFFSET) / (CELL_SIZE / 2));
+    const gridZ = Math.round((finalZ + MAZE_OFFSET) / (CELL_SIZE / 2));
+    const gridSize = MAZE_SIZE * 2 + 4;
+    
+    for (let iter = 0; iter < 3; iter++) {
+        let pushed = false;
+        for (let di = -2; di <= 2; di++) {
+            for (let dj = -2; dj <= 2; dj++) {
+                const gi = gridX + di;
+                const gj = gridZ + dj;
+                if (gi < 0 || gi >= gridSize || gj < 0 || gj >= gridSize) continue;
+                if (!wallGrid[gi] || !wallGrid[gi][gj]) continue;
+                
+                const wx = gi * (CELL_SIZE / 2) - MAZE_OFFSET;
+                const wz = gj * (CELL_SIZE / 2) - MAZE_OFFSET;
+                const dx = finalX - wx;
+                const dz = finalZ - wz;
+                const overlapX = (wallHalfSize + radius) - Math.abs(dx);
+                const overlapZ = (wallHalfSize + radius) - Math.abs(dz);
+                
+                if (overlapX > 0 && overlapZ > 0) {
+                    if (overlapX < overlapZ) finalX += (dx > 0 ? overlapX : -overlapX);
+                    else finalZ += (dz > 0 ? overlapZ : -overlapZ);
+                    pushed = true;
+                }
+            }
+        }
+        if (!pushed) break;
+    }
+    return { x: finalX, z: finalZ };
+}
+
+function updateTimerDisplay() {
+    const m = Math.floor(gameTimeLeft / 60), s = Math.floor(gameTimeLeft % 60);
+    const d = document.getElementById('timerDisplay');
+    d.textContent = `⏱ ${m}:${s.toString().padStart(2, '0')}`;
+    d.classList.toggle('warning', gameTimeLeft <= 30);
+}
+
+function startTimer() {
+    if (timerInterval) clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
+        if (!isGameActive || gameOver) return;
+        gameTimeLeft = Math.max(0, gameTimeLeft - 1);
+        updateTimerDisplay();
+        if (gameTimeLeft <= 0) { clearInterval(timerInterval); timerInterval = null; finishGame('time'); }
+    }, 1000);
+}
+
+const clock = new THREE.Clock();
+let lastFrame = 0;
+const FPS_LIMIT = IS_LOW_END ? 30 : 60;
+const FRAME_INTERVAL = 1000 / FPS_LIMIT;
+const cameraTarget = new THREE.Vector3(0, 0, 0);
+const snakeCenter = new THREE.Vector3();
+let rafId = null;
+let isPaused = false;
+
+function animate(time) {
+    if (isPaused) return;
+    rafId = requestAnimationFrame(animate);
+    if (time - lastFrame < FRAME_INTERVAL) return;
+    lastFrame = time;
+    const delta = Math.min(clock.getDelta(), 0.05);
+    const elapsed = clock.elapsedTime;
+
+    if (!isGameActive || gameOver) {
+        controls.update();
+        renderer.render(scene, camera);
+        return;
+    }
+
+    if (exitBeacon) {
+        exitBeacon.rotation.y += delta * 1.5;
+        exitBeacon.position.y = exitBeacon.userData.baseY + Math.sin(elapsed * 2) * 0.2;
+        exitBeacon.userData.light.intensity = 8 + Math.sin(elapsed * 3) * 2.0;
+        exitBeacon.userData.beam.opacity = 0.22 + Math.sin(elapsed * 2.5) * 0.1;
+        if (exitBeacon.userData.hasParticles && exitBeacon.userData.particles) {
+            exitBeacon.userData.particles.rotation.y -= delta * 0.5;
+        }
+        
+        const distToExit = Math.sqrt(Math.pow(headPos.x - exitBeacon.position.x, 2) + Math.pow(headPos.z - exitBeacon.position.z, 2));
+        if (distToExit < 2.2) {
+            playWinSound();
+            speakText('ttsWin');
+            finishGame('win');
+            return;
+        }
+    }
+
+    let angleDiff = targetAngle - dirAngle;
+    while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+    while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+    const maxTurn = delta * 5.0;
+    if (Math.abs(angleDiff) > maxTurn) angleDiff = Math.sign(angleDiff) * maxTurn;
+    dirAngle += angleDiff;
+
+    moveDir.x = Math.cos(dirAngle);
+    moveDir.z = Math.sin(dirAngle);
+
+    const currentSpeed = BASE_SPEED * speedMult;
+    let newX = headPos.x + moveDir.x * currentSpeed * delta;
+    let newZ = headPos.z + moveDir.z * currentSpeed * delta;
+
+    if (!checkWallCollision(newX, newZ)) {
+        headPos.x = newX;
+        headPos.z = newZ;
+    } else {
+        if (!checkWallCollision(newX, headPos.z)) headPos.x = newX;
+        else if (!checkWallCollision(headPos.x, newZ)) headPos.z = newZ;
+        else playBumpSound();
+    }
+
+    const perpX = -moveDir.z, perpZ = moveDir.x;
+    let px = headPos.x - moveDir.x * HEAD_ATTACH;
+    let pz = headPos.z - moveDir.z * HEAD_ATTACH;
+    
+    snakeCenter.set(0, 0, 0);
+    let visibleCount = 0;
+    
+    for (let i = 0; i < MAX_SEGMENTS; i++) {
+        const seg = segmentPositions[i];
+        if (i === 0) {
+            seg.x = px; seg.z = pz;
+        } else {
+            let dx = seg.x - px, dz = seg.z - pz;
+            let len = Math.sqrt(dx*dx + dz*dz);
+            if (len < 1e-6) { dx = -moveDir.x; dz = -moveDir.z; len = 1; }
+            seg.x = px + (dx / len) * SEGMENT_SPACING;
+            seg.z = pz + (dz / len) * SEGMENT_SPACING;
+        }
+        const pushed = pushSegmentOutOfWalls(seg.x, seg.z, baseRadii[i] * 1.15);
+        seg.x = pushed.x; seg.z = pushed.z;
+        px = seg.x; pz = seg.z;
+        
+        const mesh = snakeBody[i];
+        mesh.visible = i < activeSegments;
+        if (!mesh.visible) continue;
+        
+        const phase = i * 0.3 - elapsed * 2.5;
+        const latOff = Math.sin(phase) * 0.04;
+        const yOff = -0.45 + Math.sin(phase * 0.6 + i * 0.08) * 0.06;
+        mesh.position.set(seg.x + perpX * latOff, yOff, seg.z + perpZ * latOff);
+        snakeCenter.x += mesh.position.x;
+        snakeCenter.z += mesh.position.z;
+        visibleCount++;
+    }
+    
+    if (visibleCount > 0) {
+        snakeCenter.divideScalar(visibleCount);
+        snakeCenter.lerp(headPos, 0.55);
+    }
+
+    head.position.set(headPos.x, -0.35, headPos.z);
+    head.rotation.y = Math.PI / 2 - dirAngle;
+    head.rotation.x = 0;
+
+    const camHeight = Math.max(28, 22 + activeSegments * 0.5);
+    const camDist = Math.max(18, 14 + activeSegments * 0.4);
+    _cameraOffset.set(0, camHeight, camDist);
+
+    _desiredCamPos.copy(snakeCenter).add(_cameraOffset);
+    camera.position.lerp(_desiredCamPos, 0.08);
+    cameraTarget.lerp(snakeCenter, 0.08);
+    controls.target.copy(cameraTarget);
+
+    controls.update();
+    renderer.render(scene, camera);
+}
+
+window.showPage = function(pageId) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById(pageId).classList.add('active');
+    const canvas = document.querySelector('canvas');
+    if (canvas) {
+        if (pageId === 'page-game') {
+            canvas.style.display = 'block';
+            canvas.classList.add('game-active');
+        } else {
+            canvas.style.display = 'none';
+            canvas.classList.remove('game-active');
+        }
+    }
+    const page = document.getElementById(pageId);
+    if (page) page.scrollTop = 0;
+};
+
+window.finishGame = function(reason) {
+    if (gameOver) return;
+    gameOver = true;
+    isGameActive = false;
+    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+    
+    const t = translations[currentLang];
+    const label = document.getElementById('result-label');
+    const emoji = document.getElementById('result-emoji');
+    const winBlock = document.getElementById('win-block');
+    const loseBlock = document.getElementById('lose-block');
+    
+    if (reason === 'win') {
+        label.textContent = t.resultWinLabel;
+        label.style.color = "#0a8a4a";
+        emoji.textContent = "🐍";
+        emoji.className = "result-emoji snake-reward";
+        document.getElementById('reward-text').textContent = t.rewardText;
+        document.getElementById('result-text-win').textContent = t.resultWinText;
+        winBlock.style.display = 'block';
+        loseBlock.style.display = 'none';
+        startConfetti();
+    } else {
+        label.textContent = t.resultTimeLabel;
+        label.style.color = "#5a7a9a";
+        emoji.textContent = "⏱";
+        emoji.className = "result-emoji";
+        document.getElementById('result-text-lose').textContent = t.resultTimeText;
+        speakText('ttsTime');
+        winBlock.style.display = 'none';
+        loseBlock.style.display = 'block';
+    }
+    showPage('page-result');
+};
+
+let _starting = false;
+window.startGame = function() {
+    if (_starting) return;
+    _starting = true;
+    setTimeout(() => { _starting = false; }, 600);
+
+    unlockTTS();
+    initAudio();
+
+    gameTimeLeft = MAX_TIME;
+    updateTimerDisplay();
+    speedMult = 1.0;
+    isGameActive = true;
+    gameOver = false;
+    activeSegments = 35;
+
+    const startPos = generateMaze();
+    headPos.set(startPos.startX, 0, startPos.startZ);
+    dirAngle = Math.PI / 2;
+    targetAngle = Math.PI / 2;
+    moveDir.x = Math.cos(dirAngle);
+    moveDir.z = Math.sin(dirAngle);
+    
+    for (let i = 0; i < MAX_SEGMENTS; i++) {
+        const d = HEAD_ATTACH + i * SEGMENT_SPACING;
+        segmentPositions[i].set(headPos.x - moveDir.x * d, 0, headPos.z - moveDir.z * d);
+        snakeBody[i].visible = i < activeSegments;
+    }
+
+    controls.target.copy(headPos);
+    camera.position.copy(headPos).add(_cameraOffset);
+
+    if (timerInterval) clearInterval(timerInterval);
+    startTimer();
+
+    const canvas = document.querySelector('canvas');
+    if (canvas) {
+        canvas.style.display = 'block';
+        canvas.classList.add('game-active');
+    }
+    showPage('page-game');
+    setTimeout(() => speakText('ttsStart'), 400);
+};
+
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+document.addEventListener('gesturestart', (e) => e.preventDefault());
+document.addEventListener('dblclick', (e) => e.preventDefault());
+document.addEventListener('touchmove', (e) => {
+    if (e.touches.length > 1) e.preventDefault();
+}, { passive: false });
+
+// ===== Фон/видимость: экономия батареи + восстановление TTS =====
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+        isPaused = true;
+        if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+    } else {
+        isPaused = false;
+        if (!rafId) rafId = requestAnimationFrame(animate);
+        if (audioCtx && audioCtx.state === 'suspended') {
+            try { audioCtx.resume(); } catch(e) {}
+        }
+        // Safari может потерять доступ к TTS — сбрасываем и разблокируем
+        ttsUnlocked = false;
+        unlockTTS();
+    }
+});
+
+updateLanguage();
+
+document.getElementById('txt-startBtn').addEventListener('click', function(e) {
+    e.preventDefault();
+    startGame();
+});
+
+rafId = requestAnimationFrame(animate);
+console.log('✅ Игра "Змея и Лабиринт" готова. Режим:', IS_LOW_END ? 'облегчённый' : 'полный',
+    '| Мобильное:', isMobile, '| Озвучка разблокируется при первом касании. Кнопка "🔊 Проверить голос" для теста.');
+</script>
+</body>
+</html>
